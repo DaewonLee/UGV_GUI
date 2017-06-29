@@ -1,4 +1,4 @@
-function path = findPathAStar( obs, x_map, y_map, start, goal )
+arfunction path = findPathAStar( obs, x_map, y_map, start, goal )
 %UNTITLED Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -107,5 +107,4 @@ end
 
 
 end
-
 
