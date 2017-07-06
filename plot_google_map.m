@@ -410,7 +410,7 @@ end
 
 url = [preamble location zoomStr sizeStr maptypeStr format markers languageStr sensor keyStr styleStr];
 url
-% Get the image
+%%Get the image
 if useTemp
     filepath = fullfile(tempdir, filename);
 else
@@ -432,7 +432,8 @@ catch % error downloading map
 end
 
 [M, Mcolor] = imread(filepath);
-imwrite(M,'test.png');
+%imwrite(M,'test1.png');
+%[M, Mcolor] = imread('test1.png');
 Mcolor = uint8(Mcolor * 255);
 %M = cast(M,'double');
 delete(filepath); % delete temp file

@@ -22,7 +22,7 @@ function varargout = Control_GUI(varargin)
 
 % Edit the above text to modify the response to help Control_GUI
 
-% Last Modified by GUIDE v2.5 22-Jun-2017 12:25:28
+% Last Modified by GUIDE v2.5 04-Jul-2017 18:48:49
 
 global g_obs_cell;
 % Begin initialization code - DO NOT EDIT
@@ -56,11 +56,19 @@ function Control_GUI_OpeningFcn(hObject, eventdata, handles, varargin)
    global g_map_boundary_lat;
    global g_map_boundary_lon;
    global test_timer;
-   g_map_boundary_lat = [39.952375    39.951886   ];
-   g_map_boundary_lon = [-75.192187    -75.190929   ];
-
-%    g_map_boundary_lat = [39.952375    39.952186   ];
-%    g_map_boundary_lon = [-75.192187    -75.191929   ];
+   
+   global modePub;
+   global msgMode; % control mode
+   
+   global lookPub;
+   global msglook; % look
+   
+   global WPPub;
+   global msgWP; % WP39.952739, -75.189687 39.951567, -75.191655
+   %g_map_boundary_lat = [39.952739    39.951567   ];  
+   %g_map_boundary_lon = [-75.189687    -75.191655   ];
+   g_map_boundary_lat = [39.9515015    39.9511602   ]; %test1.png
+   g_map_boundary_lon = [-75.189214    -75.1902051   ];
    plot(g_map_boundary_lon,g_map_boundary_lat,'.')
    plot_google_map
 %[x,y] = ginput(4)
@@ -68,17 +76,33 @@ function Control_GUI_OpeningFcn(hObject, eventdata, handles, varargin)
 % Choose default command line output for Control_GUI
 handles.output = hObject;
 
-% test_timer = timer(...
-%     'ExecutionMode', 'fixedRate', ...       % Run timer repeatedly
-%     'Period', 1, ...                        % Initial period is 1 sec.
-%     'TimerFcn', {@update_display,hObject});
-% start(test_timer)
-% rosshutdown
-% MasterIP = '192.168.0.21'; %master is in this case is with mavros on companinon computer
-% rosinit(MasterIP)
-% global gps;
-% gps = rossubscriber('/mavros/global_position/raw/fix', @GPSCallback);
+rosshutdown;
+master = robotics.ros.Core;
+%MasterIP =  '192.168.0.21';
+MasterIP =  'http://daewon:11311/';
+rosinit(MasterIP)
 
+
+
+modePub = rospublisher('/jackal_mode','std_msgs/Int8');
+msgMode = rosmessage(modePub);
+
+lookPub = rospublisher('/jackal_look','std_msgs/Float64MultiArray');
+msglook = rosmessage(lookPub);
+
+WPPub = rospublisher('/jackal_waypoint','std_msgs/Float64MultiArray');
+msgWP = rosmessage(WPPub);
+
+test_timer = timer(...
+    'ExecutionMode', 'fixedRate', ...       % Run timer repeatedly
+    'Period', 1, ...                        % Initial period is 1 sec.
+    'TimerFcn', {@update_display,hObject});
+start(test_timer)
+
+global gps;
+%gps = rossubscriber('/navsat/fix', @GPSCallback); % <<<<<<<<<<<====
+
+%gps = rossubscriber('/mavros/global_position/raw/fix', @GPSCallback); % <<<<<<<<<<<====
 global Longitude;
 global Latitude;
 global Altitude;
@@ -94,10 +118,22 @@ function GPSCallback(src, message)
     global Longitude;
     global Latitude;
     global Altitude;
+    global WPPub;
+    global msgWP; % WP
+    global path_s;
+    
     Longitude = message.Longitude;
     Latitude  = message.Latitude;
     Altitude  = message.Altitude;
     %fprintf('Latitude: %f, Longitude: %f \n', Latitude, Longitude);
+    
+    
+    [WP_x,WP_y] = ginput(1);
+    hold on
+    plot(WP_x, WP_y,'x','linewidth',2,'color','r');
+    msgWP.Data = [WP_y, WP_x];
+    send(WPPub,msgWP);
+    
     pause(1);
     drawnow;
 
@@ -131,7 +167,7 @@ varargout{1} = handles.output;
 function sattlite_Callback(hObject, eventdata, handles)
    
    
-   plot_google_map('maptype', 'satellite')
+  plot_google_map('maptype', 'satellite')
 
 
 
@@ -139,7 +175,7 @@ function sattlite_Callback(hObject, eventdata, handles)
 function roadmap_Callback(hObject, eventdata, handles)
    
    
-   plot_google_map('MapType', 'roadmap') 
+  plot_google_map('MapType', 'roadmap') 
 
 
 
@@ -154,6 +190,7 @@ global g_goal;
 global g_obs_cell;
 global g_map_boundary_lat;
 global g_map_boundary_lon;
+global path;
 
 disp('in ASTAR');
 disp('you have these obstacles: ')
@@ -180,10 +217,6 @@ for i=1:length(g_obs_cell)
 end
 path = findPathAStar( obs_m, x_map, y_map, start_m, goal_m );
 
-% 
-% for i = 1: size(ID_path_old,1)
-%     set(ID_path_old(i),'marker','none');
-% end
 for i=1:size(handles.axes1.Children,1)
     isMark = findprop(handles.axes1.Children(i),'Marker');
     if(~isempty(isMark))
@@ -199,32 +232,12 @@ for i = 1: size(path,1)
     'MarkerEdgeColor','g',...
     'MarkerFaceColor',[0.5,0.5,0.5]);
 end
-fileID = fopen('path.txt','w');
-
-
-for ii=1:size(path_ll,1)
-    fprintf(fileID,'%12.8f\t%12.8f\n',path_ll(ii,1),path_ll(ii,2));
-end
-
-%fprintf(fileID,'%12.8f\t%12.8f\n',path_ll);
-fclose(fileID);
-disp('Path txt saved!!');
-aa=1;
-
-
-
-
-
-
-% --- Executes on button press in rrt.
-function rrt_Callback(hObject, eventdata, handles)
-
-
 
 % --- Executes on button press in start.
 function start_Callback(hObject, eventdata, handles)
 global g_start;
 global h_start;
+
 [start_x,start_y] = ginput(1)
  g_start = [start_x, start_y];
 %  start_m = (llToMeters(g_start(1), g_start(2)));
@@ -232,9 +245,6 @@ global h_start;
 
 hold on
 h_start = plot(start_x, start_y,'o','linewidth',2,'color','r');
-%  plot(start_ll(1), start_ll(2),'o','linewidth',2,'color','b');
-
-
 
 % --- Executes on button press in goal.
 function goal_Callback(hObject, eventdata, handles);
@@ -271,37 +281,40 @@ global start_x start_y;
 global goal_x  goal_y;
 global g_obs_cell;
 global test_timer;
-delete(test_timer);
+%delete(test_timer);
+cnt = 1;
+for i=1:size(handles.axes1.Children,1)
+    isMark = findprop(handles.axes1.Children(cnt),'Marker');
 
-clear all
-clear start_x;
-clear start_y;
-clear goal_x;
-clear goal_y;
-clear g_obs_cell;
+    %isMark = findprop(handles.axes1.Children(i),'Marker');
+    if(~isempty(isMark))
+        %set(handles.axes1.Children(i),'Marker','none');
+        delete(handles.axes1.Children(cnt));
+    elseif(isempty(isMark))
+            cnt = cnt + 1;
+    end
+   
+    
+end
+
+g_obs_cell = [];
+goal_x = [];
+goal_y = [];
+start_x = [];
+start_y = [];
+
 
 
 % --- Executes on button press in realtime.
 function realtime_Callback(hObject, eventdata, handles)
-% hObject    handle to realtime (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
 global g_start;
 global Longitude;
 global Latitude;
+
 value=get(hObject,'Value');
 if (value == 1.0)
     g_start = [Longitude,Latitude];
 end
-% Hint:  returns toggle state of realtime
-
-
-% --- Executes on button press in heading.
-function heading_Callback(hObject, eventdata, handles)
-% hObject    handle to heading (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
 
 % --- Executes on button press in Attraction.
 function Attraction_Callback(hObject, eventdata, handles)
@@ -312,9 +325,6 @@ function Attraction_Callback(hObject, eventdata, handles)
 
 % --- Executes on button press in loadObs.
 function loadObs_Callback(hObject, eventdata, handles)
-% hObject    handle to loadObs (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
 global g_obs_cell;
 FileName = uigetfile('*.dat');
 data = load(FileName);
@@ -331,9 +341,6 @@ end
 
 % --- Executes on button press in saveObs.
 function saveObs_Callback(hObject, eventdata, handles)
-% hObject    handle to saveObs (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
 global g_obs_cell;
 FileName = uiputfile('*.dat','Save As');
 fileID = fopen(FileName,'w');
@@ -344,4 +351,71 @@ for i=1:length(g_obs_cell)
 end
 
 
+% --- Executes on button press in STOP.
+function STOP_Callback(hObject, eventdata, handles)
+global modePub;
+global msgMode;
+msgMode.Data = 0;
+send(modePub,msgMode);
 
+
+% --- Executes on button press in GO.
+function GO_Callback(hObject, eventdata, handles)
+global modePub;
+global msgMode;
+msgMode.Data = 1;
+send(modePub,msgMode);
+
+
+% --- Executes on button press in LOOK.
+function LOOK_Callback(hObject, eventdata, handles)
+global modePub;
+global msgMode;
+global lookPub;
+global msglook; % look
+
+[look_x,look_y] = ginput(1);
+hold on
+plot(look_x, look_y,'x','linewidth',2,'color','r');
+
+msgMode.Data = 2;
+send(modePub,msgMode);
+
+msglook.Data = [look_y, look_x];
+send(lookPub,msglook);
+
+
+% --- Executes on button press in WP.
+function WP_Callback(hObject, eventdata, handles)
+global WPPub;
+global msgWP; % WP
+[WP_x,WP_y] = ginput(1);
+hold on
+plot(WP_x, WP_y,'x','linewidth',2,'color','r');
+msgWP.Data = [WP_y, WP_x];
+send(WPPub,msgWP);
+
+
+% --- Executes on button press in MANUAL.
+function MANUAL_Callback(hObject, eventdata, handles)
+global modePub;
+global msgMode;
+msgMode.Data = 3;
+send(modePub,msgMode);
+
+
+% --- Executes on button press in simplify.
+function simplify_Callback(hObject, eventdata, handles)
+global path;
+global path_s;
+threshold = 1.3;
+path_s = simplyfyPath( path, threshold );
+
+for i = 1: size(path_s,1)
+   path_ll(i,:) =  metersToll(path_s(i,:));
+   ID_path(i) = plot(path_ll(i,1), path_ll(i,2),'--rs',...
+    'LineWidth',2,...
+    'MarkerSize',10,...
+    'MarkerEdgeColor','r',...
+    'MarkerFaceColor',[0.5,0.5,0.5]);
+end
