@@ -22,7 +22,7 @@ function varargout = Control_GUI(varargin)
 
 % Edit the above text to modify the response to help Control_GUI
 
-% Last Modified by GUIDE v2.5 04-Jul-2017 18:48:49
+% Last Modified by GUIDE v2.5 07-Jul-2017 15:14:44
 
 global g_obs_cell;
 % Begin initialization code - DO NOT EDIT
@@ -51,38 +51,54 @@ function Control_GUI_OpeningFcn(hObject, eventdata, handles, varargin)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 % varargin   command line arguments to Control_GUI (see VARARGIN)
-   global g_obs_cell;
+addpath('astar','lib');
+global msg_gps;   
+global cnt_h_pos;
+global g_obs_cell;
    clear g_obs_cell;
+   global bias;
    global g_map_boundary_lat;
    global g_map_boundary_lon;
    global test_timer;
-   
+   global idx_path;
+   global cnt_plot;
+   cnt_plot = 0;
    global modePub;
    global msgMode; % control mode
    
    global lookPub;
    global msglook; % look
-   
+
    global WPPub;
    global msgWP; % WP39.952739, -75.189687 39.951567, -75.191655
    %g_map_boundary_lat = [39.952739    39.951567   ];  
    %g_map_boundary_lon = [-75.189687    -75.191655   ];
-   g_map_boundary_lat = [39.9515015    39.9511602   ]; %test1.png
-   g_map_boundary_lon = [-75.189214    -75.1902051   ];
+%    g_map_boundary_lat = [39.9515015    39.9511602   ]; %test1.png
+%    g_map_boundary_lon = [-75.189214    -75.1902051   ];
+   
+   g_map_boundary_lat = [39.951062    39.949707   ]; %pennpart1.png
+   g_map_boundary_lon = [-75.184125    -75.186333   ];
+   
+  %  g_map_boundary_lat = [39.951376    39.950003   ]; %pennpart2.png
+  %  g_map_boundary_lon = [-75.184952    -75.187266   ];
+   
+   %39.951062, -75.184125, 39.949707, -75.186333
+   %39.951376, -75.184952  39.950003, -75.187266
    plot(g_map_boundary_lon,g_map_boundary_lat,'.')
    plot_google_map
+   
 %[x,y] = ginput(4)
 
 % Choose default command line output for Control_GUI
 handles.output = hObject;
 
 rosshutdown;
-master = robotics.ros.Core;
-%MasterIP =  '192.168.0.21';
-MasterIP =  'http://daewon:11311/';
+%master = robotics.ros.Core;
+MasterIP =  '192.168.0.21';
+%MasterIP =  'http://daewon:11311/';
 rosinit(MasterIP)
-
-
+idx_path = 1;
+cnt_h_pos = 0;
 
 modePub = rospublisher('/jackal_mode','std_msgs/Int8');
 msgMode = rosmessage(modePub);
@@ -93,62 +109,130 @@ msglook = rosmessage(lookPub);
 WPPub = rospublisher('/jackal_waypoint','std_msgs/Float64MultiArray');
 msgWP = rosmessage(WPPub);
 
-test_timer = timer(...
-    'ExecutionMode', 'fixedRate', ...       % Run timer repeatedly
-    'Period', 1, ...                        % Initial period is 1 sec.
-    'TimerFcn', {@update_display,hObject});
-start(test_timer)
-
 global gps;
-%gps = rossubscriber('/navsat/fix', @GPSCallback); % <<<<<<<<<<<====
-
+global heading;
+gps = rossubscriber('/navsat/fix', @GPSCallback); % <<<<<<<<<<<====
 %gps = rossubscriber('/mavros/global_position/raw/fix', @GPSCallback); % <<<<<<<<<<<====
-global Longitude;
-global Latitude;
-global Altitude;
+heading = rossubscriber('/Jackal_heading');
 
-% Update handles structure
+
+
+global bias;
+bias = struct('lon',0,'lat',0,'heading',0);
+
+
 guidata(hObject, handles);
-%stop(test_timer)
-% UIWAIT makes Control_GUI wait for user response (see UIRESUME)
-% uiwait(handles.figure1);
+
 
 function GPSCallback(src, message)
     %%ROS callback function for recieving raw GPS data
-    global Longitude;
-    global Latitude;
-    global Altitude;
+
     global WPPub;
     global msgWP; % WP
     global path_s;
+    global bias;
+    global msg_gps;
+    global idx_path;
+    global isFollowPath;
+    global modePub;
+    global msgMode;
     
-    Longitude = message.Longitude;
-    Latitude  = message.Latitude;
-    Altitude  = message.Altitude;
-    %fprintf('Latitude: %f, Longitude: %f \n', Latitude, Longitude);
+    msg_gps = message;
+
+    xy = llToMeters(msg_gps.Longitude, msg_gps.Latitude);
+    xy(1) = xy(1) + bias.lon;
+    xy(2) = xy(2) + bias.lat;
+    ll = metersToll(xy);
+    msg_gps.Longitude = ll(1);
+    msg_gps.Latitude = ll(2);
+    %fprintf('Latitude: %f, Longitude: %f \n', msg_gps.Latitude, msg_gps.Longitude);
+   % pause(1);
+   % drawnow;
     
-    
-    [WP_x,WP_y] = ginput(1);
-    hold on
-    plot(WP_x, WP_y,'x','linewidth',2,'color','r');
-    msgWP.Data = [WP_y, WP_x];
+ update_display();
+ thresh_dist = 3.5;
+ %%
+ if (isFollowPath == 1)
+     if (~isempty(path_s))
+        idx_max = size(path_s,1);
+
+        dist = findDistance(xy,path_s(idx_path,:));
+        if (dist < thresh_dist)
+            if (idx_path == idx_max)
+                msgMode.Data = 0;
+                fprintf('The robot is at the goal position!\n');
+            else
+                idx_path = idx_path + 1;
+            end                  
+        end
+        wp_ll = metersToll(path_s(idx_path,:));
+        fprintf('wp_index: %d\n',idx_path);
+
+    %     plot(wp_ll(1), wp_ll(2),'--gs',...
+    %     'LineWidth',2,...
+    %     'MarkerSize',10,...
+    %     'MarkerEdgeColor','b',...
+    %     'MarkerFaceColor',[0.5,0.5,0.5])
+    msgWP.Data = [wp_ll(1), wp_ll(2)];
     send(WPPub,msgWP);
-    
-    pause(1);
-    drawnow;
+
+     end
+ end
+ 
+ send(modePub,msgMode);
+ %%
+
 
 
 % START USER CODE
 function update_display(hObject, eventdata, handles)
 % Timer timer1 callback, called each time timer iterates.
 % Gets surface Z data, adds noise, and writes it back to surface object.
-%disp('hello')
-% a=1
+global msg_gps;
+global h_pos;
+global cnt_h_pos;
 global h_start;
-global Longitude;
-global Latitude;
- set(h_start,'XData',Longitude);
- set(h_start,'YData',Latitude);
+global heading;
+global tri;
+global idx_path;
+global path_s;
+
+
+% global cnt_plot;
+% cnt_plot = cnt_plot + 1;
+% if (cnt_plot == 10)
+%     if(~isempty(path_s))
+%         for i = 1: idx_path
+%            path_ll(i,:) =  metersToll(path_s(i,:));
+% 
+%            %hold on
+% 
+%             hold on
+%            plot(path_ll(i,1), path_ll(i,2),'--rs',...
+%             'LineWidth',2,...
+%             'MarkerSize',10,...
+%             'MarkerEdgeColor','b',...
+%             'MarkerFaceColor',[0.5,0.5,0.5]);
+% 
+%         end
+%     end
+%     cnt_plot = 0;
+% end
+
+msg_heading = receive(heading,1);
+
+psi = msg_heading.Data * pi/180;
+rot = [cos(psi), sin(psi); -sin(psi), cos(psi)];
+tri_rot = tri * rot;
+
+tri_x(:) = tri_rot(:,1)+msg_gps.Longitude;
+tri_y(:) = tri_rot(:,2)+msg_gps.Latitude;
+ 
+ set(h_start,'XData',tri_x);
+ set(h_start,'YData',tri_y);
+ 
+ 
+
 % END USER CODE
 
 
@@ -188,13 +272,21 @@ addpath('/home/daewon/Documents/MATLAB/ASTAR')
 global g_start;
 global g_goal;
 global g_obs_cell;
+global g_att_cell;
 global g_map_boundary_lat;
 global g_map_boundary_lon;
 global path;
-
+global isRealtime;
+global msg_gps;
+global manual_start;
+if (isRealtime == 1.0)
+    g_start = [msg_gps.Longitude,msg_gps.Latitude];
+else
+    g_start = manual_start;
+end
 disp('in ASTAR');
 disp('you have these obstacles: ')
-length(g_obs_cell)
+
 
 map_boundary_1 = llToMeters(g_map_boundary_lon(1), g_map_boundary_lat(1));
 map_boundary_2 = llToMeters(g_map_boundary_lon(2), g_map_boundary_lat(2));
@@ -215,7 +307,16 @@ for i=1:length(g_obs_cell)
         obs_m{i}(j,:) = round(llToMeters(g_obs_cell{i}(j,1), g_obs_cell{i}(j,2)));
     end
 end
-path = findPathAStar( obs_m, x_map, y_map, start_m, goal_m );
+
+att_m = cell(0);
+for i=1:length(g_att_cell)
+    for j=1:size(g_att_cell{i},1)
+        att_m{i}(j,:) = round(llToMeters(g_att_cell{i}(j,1), g_att_cell{i}(j,2)));
+    end
+end
+
+
+path = findPathAStar2(att_m, obs_m, x_map, y_map, start_m, goal_m );
 
 for i=1:size(handles.axes1.Children,1)
     isMark = findprop(handles.axes1.Children(i),'Marker');
@@ -226,6 +327,7 @@ end
 
 for i = 1: size(path,1)
    path_ll(i,:) =  metersToll(path(i,:));
+
    ID_path(i) = plot(path_ll(i,1), path_ll(i,2),'--gs',...
     'LineWidth',2,...
     'MarkerSize',10,...
@@ -235,21 +337,42 @@ end
 
 % --- Executes on button press in start.
 function start_Callback(hObject, eventdata, handles)
-global g_start;
+
 global h_start;
+global manual_start;
+global tri;
 
 [start_x,start_y] = ginput(1)
- g_start = [start_x, start_y];
+ manual_start = [start_x, start_y];
 %  start_m = (llToMeters(g_start(1), g_start(2)));
 %  start_ll = metersToll(start_m);
 
+scale = 0.00002;
+location = [start_x, start_y];
+tri = scale * [0,1; -0.3, -0.3; 0,0; 0.3, -0.3];
+psi = -90 * pi/180;
+rot = [cos(psi), sin(psi); -sin(psi), cos(psi)];
+tri = tri * rot;
+
+%tri(:,1) = tri(:,1)+location(1);
+%tri(:,2) = tri(:,2)+location(2);
+for i=1:size(handles.axes1.Children,1)
+    isTri = findprop(handles.axes1.Children(i),'Faces');
+    if(~isempty(isTri))
+        set(handles.axes1.Children(i),'Marker','none');
+    end
+end
 hold on
-h_start = plot(start_x, start_y,'o','linewidth',2,'color','r');
+if(~isempty(h_start))
+  delete(h_start);
+end
+h_start = fill(tri(:,1)+location(1),tri(:,2)+location(2),'y','facealpha',0.9,'LineWidth',1.5);
 
 % --- Executes on button press in goal.
 function goal_Callback(hObject, eventdata, handles);
 global g_goal;
 [goal_x,goal_y] = ginput(1)
+
 hold on
 gl=plot(goal_x, goal_y,'x','linewidth',2,'color','r')
 g_goal = [goal_x, goal_y];
@@ -280,8 +403,9 @@ function clear_Callback(hObject, eventdata, handles)
 global start_x start_y;
 global goal_x  goal_y;
 global g_obs_cell;
-global test_timer;
-%delete(test_timer);
+global g_att_cell;
+global path_s;
+global h_start;
 cnt = 1;
 for i=1:size(handles.axes1.Children,1)
     isMark = findprop(handles.axes1.Children(cnt),'Marker');
@@ -296,31 +420,42 @@ for i=1:size(handles.axes1.Children,1)
    
     
 end
-
+h_start = [];
 g_obs_cell = [];
+g_att_cell = [];
 goal_x = [];
 goal_y = [];
 start_x = [];
 start_y = [];
+path_s = [];
 
 
 
 % --- Executes on button press in realtime.
 function realtime_Callback(hObject, eventdata, handles)
-global g_start;
-global Longitude;
-global Latitude;
-
+global isRealtime;
 value=get(hObject,'Value');
-if (value == 1.0)
-    g_start = [Longitude,Latitude];
-end
+isRealtime = value;
+
 
 % --- Executes on button press in Attraction.
 function Attraction_Callback(hObject, eventdata, handles)
 % hObject    handle to Attraction (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+global g_att_cell;
+if isempty(g_att_cell)
+    att = cell(0);
+end
+
+[att_x,att_y] = ginput(4);
+att_4ll=[att_x,att_y;att_x(1), att_y(1)];
+
+g_att_cell{length(g_att_cell) + 1} = att_4ll;
+
+hold on
+h3 = fill(att_x,att_y,'g');
+set(h3,'facealpha',.5)
 
 
 % --- Executes on button press in loadObs.
@@ -375,6 +510,7 @@ global lookPub;
 global msglook; % look
 
 [look_x,look_y] = ginput(1);
+
 hold on
 plot(look_x, look_y,'x','linewidth',2,'color','r');
 
@@ -390,6 +526,7 @@ function WP_Callback(hObject, eventdata, handles)
 global WPPub;
 global msgWP; % WP
 [WP_x,WP_y] = ginput(1);
+
 hold on
 plot(WP_x, WP_y,'x','linewidth',2,'color','r');
 msgWP.Data = [WP_y, WP_x];
@@ -408,14 +545,83 @@ send(modePub,msgMode);
 function simplify_Callback(hObject, eventdata, handles)
 global path;
 global path_s;
-threshold = 1.3;
+global idx_path;
+global bias;
+idx_path = 1;
+threshold = 1.2;
 path_s = simplyfyPath( path, threshold );
+
 
 for i = 1: size(path_s,1)
    path_ll(i,:) =  metersToll(path_s(i,:));
+
    ID_path(i) = plot(path_ll(i,1), path_ll(i,2),'--rs',...
     'LineWidth',2,...
     'MarkerSize',10,...
     'MarkerEdgeColor','r',...
     'MarkerFaceColor',[0.5,0.5,0.5]);
 end
+
+path_s(:,1) = path_s(:,1) - bias.lon;
+path_s(:,2) = path_s(:,2) - bias.lat;
+
+
+
+% --- Executes on button press in bias_north.
+function bias_north_Callback(hObject, eventdata, handles)
+global bias;
+% hObject    handle to bias_north (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+bias.lat = bias.lat + 1; 
+
+% --- Executes on button press in bias_west.
+function bias_west_Callback(hObject, eventdata, handles)
+global bias;
+bias.lon = bias.lon - 1; 
+% hObject    handle to bias_west (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in bias_east.
+function bias_east_Callback(hObject, eventdata, handles)
+global bias;
+% hObject    handle to bias_east (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+bias.lon = bias.lon + 1; 
+
+% --- Executes on button press in bias_south.
+function bias_south_Callback(hObject, eventdata, handles)
+global bias;
+% hObject    handle to bias_south (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+bias.lat = bias.lat - 1; 
+
+% --- Executes on button press in bias_CW.
+function bias_CW_Callback(hObject, eventdata, handles)
+global bias;
+% hObject    handle to bias_CW (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+bias.heading = bias.heading - 1; 
+
+% --- Executes on button press in bias_CCW.
+function bias_CCW_Callback(hObject, eventdata, handles)
+global bias;
+% hObject    handle to bias_CCW (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+bias.heading = bias.heading + 1; 
+
+
+% --- Executes on button press in followPath.
+function followPath_Callback(hObject, eventdata, handles)
+% hObject    handle to followPath (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+global isFollowPath;
+value=get(hObject,'Value');
+isFollowPath = value;

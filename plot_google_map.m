@@ -410,33 +410,33 @@ end
 
 url = [preamble location zoomStr sizeStr maptypeStr format markers languageStr sensor keyStr styleStr];
 url
-%%Get the image
-if useTemp
-    filepath = fullfile(tempdir, filename);
-else
-    filepath = filename;
-end
+%Get the image
+% if useTemp
+%     filepath = fullfile(tempdir, filename);
+% else
+%     filepath = filename;
+% end
+% 
+% try
+%     urlwrite(url,filepath);
+% catch % error downloading map
+%     warning(['Unable to download map form Google Servers.\n' ...
+%         'Matlab error was: %s\n\n' ...
+%         'Possible reasons: missing write permissions, no network connection, quota exceeded, or some other error.\n' ...
+%         'Consider using an API key if quota problems persist.\n\n' ...
+%         'To debug, try pasting the following URL in your browser, which may result in a more informative error:\n%s'], lasterr, url);
+%     varargout{1} = [];
+%     varargout{2} = [];
+%     varargout{3} = [];
+%     return
+% end
 
-try
-    urlwrite(url,filepath);
-catch % error downloading map
-    warning(['Unable to download map form Google Servers.\n' ...
-        'Matlab error was: %s\n\n' ...
-        'Possible reasons: missing write permissions, no network connection, quota exceeded, or some other error.\n' ...
-        'Consider using an API key if quota problems persist.\n\n' ...
-        'To debug, try pasting the following URL in your browser, which may result in a more informative error:\n%s'], lasterr, url);
-    varargout{1} = [];
-    varargout{2} = [];
-    varargout{3} = [];
-    return
-end
-
-[M, Mcolor] = imread(filepath);
-%imwrite(M,'test1.png');
-%[M, Mcolor] = imread('test1.png');
+%[M, Mcolor] = imread(filepath);
+%imwrite(M,'pennpark2.png');
+[M, Mcolor] = imread('pennpark1.png');
 Mcolor = uint8(Mcolor * 255);
 %M = cast(M,'double');
-delete(filepath); % delete temp file
+%delete(filepath); % delete temp file
 width = size(M,2);
 height = size(M,1);
 

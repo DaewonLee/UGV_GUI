@@ -11,9 +11,7 @@ for i=1:size(path,1)-2
    
     coef = findLineCoef(Pstart, Pnext);
     dist = findDistP2L(Ptest(1:2),coef);
-    if (i==119)
-        aa = 1;
-    end
+
     if (dist < threshold)
         if (i<(size(path,1)-3))
             Ptest = [path(Ptest(3)+1,:),Ptest(3)+1];
