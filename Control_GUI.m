@@ -66,6 +66,7 @@ global g_obs_cell;
    global modePub;
    global msgMode; % control mode
    
+   
    global lookPub;
    global msglook; % look
 
@@ -76,8 +77,11 @@ global g_obs_cell;
 %    g_map_boundary_lat = [39.9515015    39.9511602   ]; %test1.png
 %    g_map_boundary_lon = [-75.189214    -75.1902051   ];
    
-   g_map_boundary_lat = [39.951062    39.949707   ]; %pennpart1.png
-   g_map_boundary_lon = [-75.184125    -75.186333   ];
+%    g_map_boundary_lat = [39.951062    39.949707   ]; %pennpart1.png
+%    g_map_boundary_lon = [-75.184125    -75.186333   ];
+   
+   g_map_boundary_lat = [39.9504  39.9499   ]; %pennpart3.png
+   g_map_boundary_lon = [-75.1848    -75.1857   ];
    
   %  g_map_boundary_lat = [39.951376    39.950003   ]; %pennpart2.png
   %  g_map_boundary_lon = [-75.184952    -75.187266   ];
@@ -111,8 +115,8 @@ msgWP = rosmessage(WPPub);
 
 global gps;
 global heading;
-gps = rossubscriber('/navsat/fix', @GPSCallback); % <<<<<<<<<<<====
-%gps = rossubscriber('/mavros/global_position/raw/fix', @GPSCallback); % <<<<<<<<<<<====
+%gps = rossubscriber('/navsat/fix', @GPSCallback); % <<<<<<<<<<<====
+gps = rossubscriber('/mavros/global_position/raw/fix', @GPSCallback); % <<<<<<<<<<<====
 heading = rossubscriber('/Jackal_heading');
 
 
@@ -140,14 +144,16 @@ function GPSCallback(src, message)
     msg_gps = message;
 
     xy = llToMeters(msg_gps.Longitude, msg_gps.Latitude);
-    xy(1) = xy(1) + bias.lon;
-    xy(2) = xy(2) + bias.lat;
+    if(~isempty(bias))
+        xy(1) = xy(1) + bias.lon;
+        xy(2) = xy(2) + bias.lat;
+    end
     ll = metersToll(xy);
     msg_gps.Longitude = ll(1);
     msg_gps.Latitude = ll(2);
     %fprintf('Latitude: %f, Longitude: %f \n', msg_gps.Latitude, msg_gps.Longitude);
    % pause(1);
-   % drawnow;
+    %drawnow;
     
  update_display();
  thresh_dist = 3.5;
@@ -196,40 +202,62 @@ global heading;
 global tri;
 global idx_path;
 global path_s;
+global sight;
+global msgMode;
+global h_sight;
 
-
-% global cnt_plot;
-% cnt_plot = cnt_plot + 1;
-% if (cnt_plot == 10)
-%     if(~isempty(path_s))
-%         for i = 1: idx_path
-%            path_ll(i,:) =  metersToll(path_s(i,:));
-% 
-%            %hold on
-% 
-%             hold on
-%            plot(path_ll(i,1), path_ll(i,2),'--rs',...
-%             'LineWidth',2,...
-%             'MarkerSize',10,...
-%             'MarkerEdgeColor','b',...
-%             'MarkerFaceColor',[0.5,0.5,0.5]);
-% 
-%         end
-%     end
-%     cnt_plot = 0;
-% end
+%%
+global cnt_plot;
+cnt_plot = cnt_plot + 1;
+if (cnt_plot == 10)
+    if(~isempty(path_s))
+        for i = 1: idx_path
+            path_ll(i,:) =  metersToll(path_s(i,:));
+            hold on
+            plot(path_ll(i,1), path_ll(i,2),'--rs',...
+            'LineWidth',2,...
+            'MarkerSize',10,...
+            'MarkerEdgeColor','b',...
+            'MarkerFaceColor',[0.5,0.5,0.5]);
+            drawnow
+        end
+    end
+    cnt_plot = 0;
+end
+%%
 
 msg_heading = receive(heading,1);
 
 psi = msg_heading.Data * pi/180;
 rot = [cos(psi), sin(psi); -sin(psi), cos(psi)];
-tri_rot = tri * rot;
 
-tri_x(:) = tri_rot(:,1)+msg_gps.Longitude;
-tri_y(:) = tri_rot(:,2)+msg_gps.Latitude;
+if(~isempty(tri))
+    tri_rot = tri * rot;
+
+    tri_x(:) = tri_rot(:,1)+msg_gps.Longitude;
+    tri_y(:) = tri_rot(:,2)+msg_gps.Latitude;
+
+     set(h_start,'XData',tri_x);
+     set(h_start,'YData',tri_y);
+end
  
- set(h_start,'XData',tri_x);
- set(h_start,'YData',tri_y);
+ if (msgMode.Data == 2)
+     if(~isempty(h_sight))
+        sight_rot = sight * rot;
+        sight_x(:) = sight_rot(:,1)+msg_gps.Longitude;
+        sight_y(:) = sight_rot(:,2)+msg_gps.Latitude;
+
+        set(h_sight,'XData',sight_x);
+        set(h_sight,'YData',sight_y);
+     end
+ else
+     delete(h_sight)
+ end
+ 
+ 
+ 
+ 
+ 
  
  
 
@@ -349,7 +377,7 @@ global tri;
 
 scale = 0.00002;
 location = [start_x, start_y];
-tri = scale * [0,1; -0.3, -0.3; 0,0; 0.3, -0.3];
+tri = scale * [0,0.7; -0.3, -0.3; 0,0; 0.3, -0.3];
 psi = -90 * pi/180;
 rot = [cos(psi), sin(psi); -sin(psi), cos(psi)];
 tri = tri * rot;
@@ -406,6 +434,8 @@ global g_obs_cell;
 global g_att_cell;
 global path_s;
 global h_start;
+global bias;
+global g_goal;
 cnt = 1;
 for i=1:size(handles.axes1.Children,1)
     isMark = findprop(handles.axes1.Children(cnt),'Marker');
@@ -417,8 +447,6 @@ for i=1:size(handles.axes1.Children,1)
     elseif(isempty(isMark))
             cnt = cnt + 1;
     end
-   
-    
 end
 h_start = [];
 g_obs_cell = [];
@@ -428,6 +456,8 @@ goal_y = [];
 start_x = [];
 start_y = [];
 path_s = [];
+bias = [];
+g_goal = [];
 
 
 
@@ -502,16 +532,40 @@ msgMode.Data = 1;
 send(modePub,msgMode);
 
 
-% --- Executes on button press in LOOK.
+% --- Executes on button press in  .
 function LOOK_Callback(hObject, eventdata, handles)
 global modePub;
 global msgMode;
 global lookPub;
 global msglook; % look
-
+global sight;
+global msg_gps;
+global h_sight;
 [look_x,look_y] = ginput(1);
 
+
 hold on
+%plot(look_x, look_y,'x','linewidth',2,'color','r');
+
+scale = 0.0005;
+
+fov = 60*pi/180;
+p1 = [-sin(fov/2), cos(fov/2)];
+p2 = [sin(fov/2), cos(fov/2)];
+p3 = [0,0];
+sight = scale * [p1;p2;p3];
+psi = -90 * pi/180;
+rot = [cos(psi), sin(psi); -sin(psi), cos(psi)];
+sight = sight * rot;
+sight_x(:) = sight(:,1)+msg_gps.Longitude;
+sight_y(:) = sight(:,2)+msg_gps.Latitude;
+hold on
+delete(h_sight)
+h_sight=fill(sight_x',sight_y',[1, 0.5 ,0],...
+'facealpha',0.2,...
+'LineWidth',1,...
+'edgecolor',[1, 0.5 ,0],...
+'edgealpha',0.2);
 plot(look_x, look_y,'x','linewidth',2,'color','r');
 
 msgMode.Data = 2;
@@ -561,9 +615,10 @@ for i = 1: size(path_s,1)
     'MarkerEdgeColor','r',...
     'MarkerFaceColor',[0.5,0.5,0.5]);
 end
-
-path_s(:,1) = path_s(:,1) - bias.lon;
-path_s(:,2) = path_s(:,2) - bias.lat;
+if(~isempty(bias))
+    path_s(:,1) = path_s(:,1) - bias.lon;
+    path_s(:,2) = path_s(:,2) - bias.lat;
+end
 
 
 
