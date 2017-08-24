@@ -318,11 +318,11 @@ if (isOnline)
     end
     
     [M, Mcolor] = imread(filepath);
-    imwrite(M,'pennpark3.png');
+    imwrite(M,'nuair_buliding.png');
     delete(filepath); % delete temp file
     
 else
-    [M, Mcolor] = imread('pennpark3.png');
+    [M, Mcolor] = imread('tri_L.png');
 end
 
 %[M, Mcolor] = imread('pennpark1.png');

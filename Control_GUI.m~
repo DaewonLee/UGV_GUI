@@ -83,20 +83,9 @@ bias.lat = 0;
 %    g_map_boundary_lat = [39.951062    39.949707   ]; %pennpart1.png
 %    g_map_boundary_lon = [-75.184125    -75.186333   ];
 
-  
-  % g_map_boundary_lat = [43.230268  43.229326   ]; %nuair.png
-  % g_map_boundary_lon = [-75.418484   -75.420925   ];
-
-%   g_map_boundary_lat = [43.217082  43.216418   ]; %nuair_test.png
-%   g_map_boundary_lon = [-75.393875   -75.394937   ];
-%    
-%    g_map_boundary_lat = [43.230899  43.229507   ]; %tri_R.png
-%    g_map_boundary_lon = [-75.406233   -75.408765   ];
-%    
-    g_map_boundary_lat = [43.230619  43.229093   ]; %tri_L.png
-    g_map_boundary_lon = [-75.425576   -75.428550   ];
+   g_map_boundary_lat = [43.217082  43.216418   ]; %nuair.png
+   g_map_boundary_lon = [-75.393875   -75.394937   ];
    
-
  %  g_map_boundary_lat = [39.9504  39.9499   ]; %pennpart3.png
  %  g_map_boundary_lon = [-75.1848    -75.1857   ];
    
@@ -105,8 +94,6 @@ bias.lat = 0;
    
    %39.951062, -75.184125, 39.949707, -75.186333
    %39.951376, -75.184952  39.950003, -75.187266
-   
-
    plot(g_map_boundary_lon,g_map_boundary_lat,'.')
    plot_google_map
    
@@ -136,8 +123,8 @@ msgWP = rosmessage(WPPub);
 
 global gps;
 global heading;
-%gps = rossubscriber('/navsat/fix', @GPSCallback); % <<<<<<<<<<<====
-gps = rossubscriber('/mavros/global_position/raw/fix', @GPSCallback); % <<<<<<<<<<<====
+gps = rossubscriber('/navsat/fix', @GPSCallback); % <<<<<<<<<<<====
+%gps = rossubscriber('/mavros/global_position/raw/fix', @GPSCallback); % <<<<<<<<<<<====
 heading = rossubscriber('/Jackal_heading');
 
 
@@ -257,10 +244,9 @@ end
 %%
 
 msg_heading = receive(heading,1);
-% if (~isempty(bias))
-%     bias
-%     msg_heading.Data = msg_heading.Data + bias.heading;
-% end
+if (isempty(bias))
+    bias.heading = 0;
+end
 psi = msg_heading.Data * pi/180;
 rot = [cos(psi), sin(psi); -sin(psi), cos(psi)];
 
