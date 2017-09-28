@@ -1,6 +1,6 @@
 function varargout = plot_google_map(varargin)
 
-isOnline = false;
+isOnline = true;
 persistent apiKey useTemp
 if isnumeric(apiKey)
     % first run, check if API key file exists
@@ -318,11 +318,11 @@ if (isOnline)
     end
     
     [M, Mcolor] = imread(filepath);
-    imwrite(M,'nuair_buliding.png');
+    imwrite(M,'moorebuilding.png');
     delete(filepath); % delete temp file
     
 else
-    [M, Mcolor] = imread('tri_L.png');
+    [M, Mcolor] = imread('pennpark3.png');
 end
 
 %[M, Mcolor] = imread('pennpark1.png');

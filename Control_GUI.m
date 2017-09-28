@@ -22,7 +22,7 @@ function varargout = Control_GUI(varargin)
 
 % Edit the above text to modify the response to help Control_GUI
 
-% Last Modified by GUIDE v2.5 07-Jul-2017 15:14:44
+% Last Modified by GUIDE v2.5 27-Sep-2017 17:35:21
 
 global g_obs_cell;
 % Begin initialization code - DO NOT EDIT
@@ -52,6 +52,10 @@ function Control_GUI_OpeningFcn(hObject, eventdata, handles, varargin)
 % handles    structure with handles and user data (see GUIDATA)
 % varargin   command line arguments to Control_GUI (see VARARGIN)
 addpath('astar','lib');
+global is_realtime;
+
+is_realtime = true;
+
 global msg_gps;   
 global cnt_h_pos;
 global g_obs_cell;
@@ -93,12 +97,12 @@ bias.lat = 0;
 %    g_map_boundary_lat = [43.230899  43.229507   ]; %tri_R.png
 %    g_map_boundary_lon = [-75.406233   -75.408765   ];
 %    
-    g_map_boundary_lat = [43.230619  43.229093   ]; %tri_L.png
-    g_map_boundary_lon = [-75.425576   -75.428550   ];
+ %   g_map_boundary_lat = [43.230619  43.229093   ]; %tri_L.png
+ %   g_map_boundary_lon = [-75.425576   -75.428550   ];
    
 
- %  g_map_boundary_lat = [39.9504  39.9499   ]; %pennpart3.png
- %  g_map_boundary_lon = [-75.1848    -75.1857   ];
+   %g_map_boundary_lat = [39.9504  39.9499   ]; %pennpart3.png
+   %g_map_boundary_lon = [-75.1848    -75.1857   ];
    
   %  g_map_boundary_lat = [39.951376    39.950003   ]; %pennpart2.png
   %  g_map_boundary_lon = [-75.184952    -75.187266   ];
@@ -106,6 +110,13 @@ bias.lat = 0;
    %39.951062, -75.184125, 39.949707, -75.186333
    %39.951376, -75.184952  39.950003, -75.187266
    
+%g_map_boundary_lat = [39.951748    39.950945   ]; % shoemakergreen.png
+%g_map_boundary_lon = [-75.189046    -75.190390   ];
+
+   
+g_map_boundary_lat = [39.952582    39.951910   ]; % moorebuilding.png
+g_map_boundary_lon = [-75.190025    -75.191332   ];
+
 
    plot(g_map_boundary_lon,g_map_boundary_lat,'.')
    plot_google_map
@@ -116,10 +127,25 @@ bias.lat = 0;
 handles.output = hObject;
 
 rosshutdown;
-%master = robotics.ros.Core;
-MasterIP =  '192.168.0.21';
-%MasterIP =  '192.168.75.160';
+
+MasterIP =  '192.168.0.21';  
 %MasterIP =  'http://daewon:11311/';
+% rostopic pub -r 10 /mavros/global_position/raw/fix sensor_msgs/NavSatFix "header:
+%   seq: 0
+%   stamp: {secs: 0, nsecs: 0}
+%   frame_id: ''
+% status: {status: 0, service: 0}
+% latitude: 39.952249
+% longitude: -75.190147
+% altitude: 0.0
+% position_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+% position_covariance_type: 0"
+
+%rostopic pub -r 10 /Jackal_heading std_msgs/Float64 "data: 0.0" 
+
+
+
+
 rosinit(MasterIP)
 idx_path = 1;
 cnt_h_pos = 0;
@@ -137,7 +163,8 @@ msgWP = rosmessage(WPPub);
 global gps;
 global heading;
 %gps = rossubscriber('/navsat/fix', @GPSCallback); % <<<<<<<<<<<====
-gps = rossubscriber('/mavros/global_position/raw/fix', @GPSCallback); % <<<<<<<<<<<====
+%gps = rossubscriber('/mavros/global_position/raw/fix', @GPSCallback); % <<<<<<<<<<<====
+gps = rossubscriber('/Jackal_GPS', @GPSCallback); % <<<<<<<<<<<====
 heading = rossubscriber('/Jackal_heading');
 
 
@@ -333,9 +360,9 @@ global g_obs_cell;
 global g_att_cell;
 global g_map_boundary_lat;
 global g_map_boundary_lon;
+global msg_gps;
 global path;
 global isRealtime;
-global msg_gps;
 global manual_start;
 if (isRealtime == 1.0)
     g_start = [msg_gps.Longitude,msg_gps.Latitude];
@@ -399,9 +426,10 @@ function start_Callback(hObject, eventdata, handles)
 global h_start;
 global manual_start;
 global tri;
-
+global g_start;
 [start_x,start_y] = ginput(1)
  manual_start = [start_x, start_y];
+ g_start = manual_start;
 %  start_m = (llToMeters(g_start(1), g_start(2)));
 %  start_ll = metersToll(start_m);
 
@@ -461,6 +489,7 @@ function clear_Callback(hObject, eventdata, handles)
 global start_x start_y;
 global goal_x  goal_y;
 global g_obs_cell;
+global g_occ_cell;
 global g_att_cell;
 global path_s;
 global h_start;
@@ -480,6 +509,7 @@ for i=1:size(handles.axes1.Children,1)
 end
 h_start = [];
 g_obs_cell = [];
+g_occ_cell = [];
 g_att_cell = [];
 goal_x = [];
 goal_y = [];
@@ -715,3 +745,171 @@ function followPath_Callback(hObject, eventdata, handles)
 global isFollowPath;
 value=get(hObject,'Value');
 isFollowPath = value;
+
+
+% --- Executes on button press in Occlusion.
+function Occlusion_Callback(hObject, eventdata, handles)
+global g_obs_cell;
+global g_occ_cell;
+if isempty(g_obs_cell)
+    obs = cell(0);
+end
+if isempty(g_occ_cell)
+    occ = cell(0);
+end
+
+[obs_x,obs_y] = ginput(4);
+obs_4ll=[obs_x,obs_y;obs_x(1), obs_y(1)];
+
+g_obs_cell{length(g_obs_cell) + 1} = obs_4ll;
+g_occ_cell{length(g_occ_cell) + 1} = obs_4ll;
+
+hold on
+h4 = fill(obs_x,obs_y,'b');
+set(h4,'facealpha',.5)
+
+
+% --- Executes on button press in Goal_Opt.
+function Goal_Opt_Callback(hObject, eventdata, handles)
+global g_obs_cell; %lonlat
+global g_occ_cell;
+global g_map_boundary_lat; % (39.9526   39.9519)
+global g_map_boundary_lon; %(-75.1900  -75.1913)
+global g_target;
+global g_goal;
+global g_stationary;
+offset = llToMeters(min(g_map_boundary_lon), min(g_map_boundary_lat));
+map_max = llToMeters(max(g_map_boundary_lon), max(g_map_boundary_lat)) - offset;
+target_m = llToMeters(g_target(1),g_target(2)) - offset;
+stationary_m = llToMeters(g_stationary(1),g_stationary(2)) - offset;
+obs_cell = g_obs_cell;
+for n=1:size(g_obs_cell,2)
+    for k=1:5
+        obs_cell{n}(k,:)=llToMeters(g_obs_cell{n}(k,1), g_obs_cell{n}(k,2))-offset;
+    end
+end
+
+occ_cell = g_occ_cell;
+shade_cell = cell(0);
+
+for n=1:size(g_occ_cell,2)
+    in_34quad = 0;
+    for k=1:5
+        occ_cell{n}(k,:)=llToMeters(g_occ_cell{n}(k,1), g_occ_cell{n}(k,2))-offset;
+        corner_angle(k,1) = atan2(occ_cell{n}(k,2)-target_m(2),occ_cell{n}(k,1)-target_m(1));
+        corner_angle(k,2:3) = occ_cell{n}(k,1:2);
+        
+        if(in_34quad == 0)
+            if (corner_angle(k,1) > pi/2)
+                in_34quad = in_34quad + 1;
+            elseif (corner_angle(k,1) < -pi/2)
+                in_34quad = in_34quad - 1;
+            end
+        end
+        
+        if(in_34quad == 1)
+            if (corner_angle(k,1) < -pi/2)
+                in_34quad = in_34quad + 1;
+            end
+        end
+        
+        if(in_34quad == -1)
+            if (corner_angle(k,1) > pi/2)
+                in_34quad = in_34quad - 1;
+            end
+        end
+        %
+    end
+    
+    if (abs(in_34quad) == 2)
+        for k=1:5
+            if ( corner_angle(k,1) < 0)
+                corner_angle(k,1) = corner_angle(k,1) + 2*pi;
+            end
+        end
+    end
+        %corner_selected(n,:)=[min(corner_angle), 
+        id_min = find(corner_angle==min(corner_angle(:,1)),1);
+        id_max = find(corner_angle==max(corner_angle(:,1)),1);
+        A = 300;
+        min_ext = target_m + A*[cos(corner_angle(id_min,1)), sin(corner_angle(id_min,1))];
+        max_ext = target_m + A*[cos(corner_angle(id_max,1)), sin(corner_angle(id_max,1))];
+        shade_cell{n}=[corner_angle(id_min,2:3) ;  min_ext; max_ext; corner_angle(id_max,2:3); corner_angle(id_min,2:3)];
+        
+end
+
+hold on
+for n=1:size(shade_cell,2)
+    for k = 1:5
+       shade_m = shade_cell{n}+offset;
+       shade_ll(k,:) =  metersToll(shade_m(k,:));
+    end
+    hold on
+h4 = fill(shade_ll(:,1),shade_ll(:,2),'y');
+set(h4,'facealpha',.5)
+end
+
+
+%% navigable map
+navigable_map = zeros(round(map_max(1)),round(map_max(2))); 
+% for i=1:length(obs_cell)
+%     navigable_map = occupyObsMap(navigable_map_init,obs_cell{i});
+%     navigable_map_init = navigable_map;
+% end
+
+%% occlusion map
+
+%map_out = occupyOcclusionMap( map, obs_cell,  shade_cell, target )
+cnt = 0;
+for i = 1:size(navigable_map,1)
+   for j = 1:size(navigable_map,2)
+       in_obs = 0;
+       in_shade = 0;
+       for k = 1:size(obs_cell,2)
+            if(inpolygon(i,j,obs_cell{k}(:,1),obs_cell{k}(:,2)))
+                in_obs = 1;
+            end
+       end
+       
+       if (in_obs == 0)
+             for  m = 1:size(shade_cell,2)
+                if(inpolygon(i,j,shade_cell{m}(:,1),shade_cell{m}(:,2)))
+                    in_shade = 1;
+                end
+             end
+       end
+       
+       if(in_obs == 0 && in_shade == 0)
+            navigable_map(i,j) = 1;
+            cnt = cnt + 1;
+            v1 = stationary_m - target_m;
+            v2 = -target_m + [i,j];
+            possible_spot_angle(cnt,1) = acos(sum(v1.*v2)/(norm(v1)*norm(v2)));
+            possible_spot_angle(cnt,2:3) = [i,j];
+       end
+   end
+end
+id_best_spot = find(possible_spot_angle==max(possible_spot_angle(:,1)),1);
+best_spot = possible_spot_angle(id_best_spot,2:3);
+best_spot = best_spot + offset;
+best_spot_ll = metersToll(best_spot);
+gl=plot(best_spot_ll(1), best_spot_ll(2),'x','markersize',4,'linewidth',2,'color','m')
+g_goal = best_spot_ll;
+% --- Executes on button press in Target.
+function Target_Callback(hObject, eventdata, handles)
+global g_target;
+[target_x,target_y] = ginput(1)
+
+hold on
+gl=plot(target_x, target_y,'x','markersize',4,'linewidth',2,'color','r')
+g_target = [target_x, target_y];
+
+
+% --- Executes on button press in Stationary_cam.
+function Stationary_cam_Callback(hObject, eventdata, handles)
+global g_stationary;
+[stationary_x,stationary_y] = ginput(1)
+
+hold on
+gl=plot(stationary_x, stationary_y,'*','markersize',4,'linewidth',2,'color','g')
+g_stationary = [stationary_x, stationary_y];
