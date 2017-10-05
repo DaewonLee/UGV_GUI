@@ -101,8 +101,8 @@ bias.lat = 0;
  %   g_map_boundary_lon = [-75.425576   -75.428550   ];
    
 
-   %g_map_boundary_lat = [39.9504  39.9499   ]; %pennpart3.png
-   %g_map_boundary_lon = [-75.1848    -75.1857   ];
+  % g_map_boundary_lat = [39.9504  39.9499   ]; %pennpart3.png
+  % g_map_boundary_lon = [-75.1848    -75.1857   ];
    
   %  g_map_boundary_lat = [39.951376    39.950003   ]; %pennpart2.png
   %  g_map_boundary_lon = [-75.184952    -75.187266   ];
@@ -114,9 +114,11 @@ bias.lat = 0;
 %g_map_boundary_lon = [-75.189046    -75.190390   ];
 
    
-g_map_boundary_lat = [39.952582    39.951910   ]; % moorebuilding.png
-g_map_boundary_lon = [-75.190025    -75.191332   ];
+%g_map_boundary_lat = [39.952582    39.951910   ]; % moorebuilding.png
+%g_map_boundary_lon = [-75.190025    -75.191332   ];.
 
+g_map_boundary_lat = [32.014932    32.010429   ]; % lane3.png
+g_map_boundary_lon = [-81.824915    -81.830172   ];
 
    plot(g_map_boundary_lon,g_map_boundary_lat,'.')
    plot_google_map
@@ -128,15 +130,17 @@ handles.output = hObject;
 
 rosshutdown;
 
-MasterIP =  '192.168.0.21';  
-%MasterIP =  'http://daewon:11311/';
+%MasterIP =  '192.168.0.21';    
+MasterIP =  'http://daewon:11311/';
 % rostopic pub -r 10 /mavros/global_position/raw/fix sensor_msgs/NavSatFix "header:
+
+% rostopic pub -r 10 /Jackal_GPS sensor_msgs/NavSatFix "header:
 %   seq: 0
 %   stamp: {secs: 0, nsecs: 0}
 %   frame_id: ''
 % status: {status: 0, service: 0}
-% latitude: 39.952249
-% longitude: -75.190147
+% latitude: 32.014768
+% longitude: -81.825183
 % altitude: 0.0
 % position_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 % position_covariance_type: 0"
@@ -846,7 +850,7 @@ for n=1:size(shade_cell,2)
     end
     hold on
 h4 = fill(shade_ll(:,1),shade_ll(:,2),'y');
-set(h4,'facealpha',.5)
+set(h4,'facealpha',.2)
 end
 
 
